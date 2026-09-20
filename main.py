@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy
 import sounddevice as sd
+from scrapyard import dab
 
 
 def listen(freq, BW, samps, num):
@@ -66,13 +67,15 @@ def play_audio(audio_samples, sample_rate=48000):
 
 def main():
     num = 500
-    freq = np.int64(91_900_000)
+    freq = np.int64(204_640_000)
     BW = 2.4e6
     samps = np.int64(2**14)
     data = listen(freq, BW, samps, num)
-    create_plot(data, freq, BW, num, samps)
-    demod, rate = fm_demodulate(data, BW)
-    play_audio(demod, rate)
+    #create_plot(data, freq, BW, num, samps)
+    dab.dab_freq(data, freq, BW, samps)
+    #demod, rate = fm_demodulate(data, BW)
+    #play_audio(demod, rate)
+
 
 
 main()
