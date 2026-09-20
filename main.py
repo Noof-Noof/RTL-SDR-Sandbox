@@ -2,6 +2,7 @@ from rtlsdr import RtlSdr
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy
+import sounddevice as sd
 
 
 def listen(freq, BW, samps, num):
@@ -13,7 +14,7 @@ def listen(freq, BW, samps, num):
     sdr.gain = 48.0
     print(sdr.gain)
 
-    x = sdr.read_samples(2048) # get rid of initial empty samples
+    x = sdr.read_samples(2048)
     x = sdr.read_samples(samps*num)
     sdr.close()
     return x
@@ -36,16 +37,42 @@ def create_plot(data, center_freq, sample_rate, num, samps):
     plt.ylabel("Time [s]")
     plt.show()
 
+def fm_demodulate(iq_samples, sample_rate, audio_rate=48000):
+    iq_samples = np.asarray(iq_samples, dtype=np.complex64)
+    prod = iq_samples[1:] * np.conj(iq_samples[:-1])
+    demod = np.angle(prod)  # radians, range [-pi, pi]
+    stage1_factor = int(sample_rate // 240000)
+    if stage1_factor > 1:
+        demod = scipy.signal.decimate(demod, stage1_factor, ftype='fir', zero_phase=True)
+        intermediate_rate = sample_rate / stage1_factor
+    else:
+        intermediate_rate = sample_rate
 
+    stage2_factor = int(round(intermediate_rate / audio_rate))
+    if stage2_factor > 1:
+        factor = stage2_factor
+        while factor > 1:
+            f = min(factor, 10)
+            demod = scipy.signal.decimate(demod, f, ftype='fir', zero_phase=True)
+            factor //= f
+    demod = demod / (np.max(np.abs(demod)) + 1e-9)
+
+    return demod.astype(np.float32), int(audio_rate)
+
+def play_audio(audio_samples, sample_rate=48000):
+    audio_samples = np.asarray(audio_samples, dtype=np.float32)
+    sd.play(audio_samples, samplerate=sample_rate, blocking=True)
 
 
 def main():
     num = 500
-    freq = np.int64(100_700_000)
+    freq = np.int64(91_900_000)
     BW = 2.4e6
-    samps = np.int64(2048)
+    samps = np.int64(2**14)
     data = listen(freq, BW, samps, num)
     create_plot(data, freq, BW, num, samps)
+    demod, rate = fm_demodulate(data, BW)
+    play_audio(demod, rate)
 
 
 main()
